@@ -1,0 +1,73 @@
+language: perl
+dist: trusty
+git:
+    depth: 5
+
+cache:
+  - ccache
+  - apt
+  - directories:
+    - /tmp/gsl-2.2.1
+    - /tmp/gsl-2.0
+    - /tmp/gsl-2.1
+    - /tmp/gsl-1.15
+    - /tmp/gsl-1.16
+    - /tmp/gsl-master
+
+before_cache:
+  - rm -f /tmp/gsl-*/config.log /tmp/gsl-*/libtool
+
+perl:
+    - "5.24"
+    - "5.20-extras" # -Duseshrplib -Duseithreads
+    - "5.16"
+    - "5.10"
+    - "5.8"
+
+env:
+    global:
+        - CCACHE_CPP2=1
+        - CC="ccache clang"
+    matrix:
+        - GSL=2.2.1
+        - GSL=2.1
+        - GSL=2.0
+        - GSL=1.16
+        - GSL=1.15
+        - GSL=master
+
+addons:
+  apt:
+    packages:
+      # - libgsl0-dev # this is 1.16 on trusty
+      - gdb
+      - ccache
+      - swig2.0
+      - texinfo
+
+before_install: ./_travis/before_install.sh
+
+# Add verbosity for debugging
+install:
+    # this should always point to the version we build the CPAN dist with
+    - PATH=/tmp/gsl-2.2.1/bin:$PATH cpanm --installdeps --notest . &> /dev/null
+
+before_script:
+    - ulimit -c unlimited -S       # enable core dumps
+
+script:
+    - export LD_LIBRARY_PATH=/tmp/gsl-$GSL/lib
+    - export PATH=/tmp/gsl-$GSL/bin:$PATH
+    - cd /tmp
+    - tar zxpf Math-GSL*
+    - cd Math-GSL*
+    - perl Build.PL
+    - ./Build
+    # - ./Build test verbose=1
+    # -j3 saves us 3 seconds but makes the output really annoying to read
+    - prove -rblvs t/
+
+# NOTE: this only finds the first corefile generated
+after_failure:
+    - COREFILE=$(find . -maxdepth 1 -name "core*" | head -n 1) # find core file
+    - if [[ -f "$COREFILE" ]]; then gdb -c "$COREFILE" `which perl` -ex "thread apply all bt" -ex "info registers" -ex "info float" -ex "set pagination 0" -batch; fi
