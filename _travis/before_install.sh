@@ -27,8 +27,9 @@ _get_master_gsl () {
         ls -la
         [ -d ".git" ] && git pull origin master
     fi
-
+    echo "ok"
     GSL_COMMIT=`git rev-parse master`
+    echo "ok2"
     echo "Testing GSL master commit $GSL_COMMIT"
 
     ./autogen.sh
